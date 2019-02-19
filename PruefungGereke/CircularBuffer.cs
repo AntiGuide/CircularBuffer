@@ -13,13 +13,14 @@ class CircularBuffer<T> : ICircularBuffer<T> {
     public bool IsFull =>   (Count == Capacity);
 
     public CircularBuffer(int capacity) {
+        buffer = new T[capacity];
         Capacity = capacity;
         writePointer = new BufferIndex(capacity);
         readPointer = new BufferIndex(capacity);
     }
 
     public void Clear() {
-        buffer = new T[Capacity];
+        Count = 0;
         writePointer.Index = 0;
         readPointer.Index = 0;
     }
