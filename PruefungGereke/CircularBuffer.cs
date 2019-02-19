@@ -1,41 +1,55 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 
 class CircularBuffer<T> : ICircularBuffer<T> {
     private T[] buffer;
     private BufferIndex writePointer;
+    private Mutex writePointerMutex = new Mutex();
     private BufferIndex readPointer;
+    private Mutex readPointerMutex = new Mutex();
+    private int count;
+    private int capacity;
 
-    public int Capacity     { get; private set; }
-    public int Count        { get; private set; }
-    public bool IsEmpty =>  (0 == Count);
-    public bool IsFull =>   (Count == Capacity);
+    public int Capacity { get => capacity; }
+    public int Count { get => count; }
+    public bool IsEmpty => (0 == Count);
+    public bool IsFull => (Count == Capacity);
 
     public CircularBuffer(int capacity) {
         buffer = new T[capacity];
-        Capacity = capacity;
+        this.capacity = capacity;
         writePointer = new BufferIndex(capacity);
         readPointer = new BufferIndex(capacity);
     }
 
     public void Clear() {
-        Count = 0;
+        count = 0;
         writePointer.Index = 0;
         readPointer.Index = 0;
     }
 
     public T Consume() {
-        if (0 == Count) {
+        if (0 == count) {
             throw new BufferUnderflowException();
         }
 
-        Count--;
-        return buffer[readPointer.Index++];
+        Interlocked.Decrement(ref count);
+        readPointerMutex.WaitOne();
+        var ret = buffer[readPointer.Index++];
+        readPointerMutex.ReleaseMutex();
+        return ret;
     }
 
     public void ConsumeAll(Callback<T> callback) {
-        throw new NotImplementedException();
+        for (; ; ) {
+            try {
+                callback(Consume());
+            } catch (BufferUnderflowException) {
+                return;
+            }
+        }
     }
 
     public void Produce(T obj) {
@@ -43,12 +57,25 @@ class CircularBuffer<T> : ICircularBuffer<T> {
             throw new BufferOverflowException();
         }
 
-        Count++;
+        Interlocked.Increment(ref count);
+        writePointerMutex.WaitOne();
         buffer[writePointer.Index++] = obj;
+        writePointerMutex.ReleaseMutex();
     }
 
     public int ProduceAll(IEnumerable<T> add) {
-        throw new NotImplementedException();
+        var tmpCount = 0;
+        foreach (var item in add) {
+            try {
+                Produce(item);
+            } catch (BufferOverflowException) {
+                return tmpCount;
+            }
+
+            tmpCount++;
+        }
+
+        return tmpCount;
     }
 
     public T WaitConsume() {
