@@ -1,0 +1,2 @@
+﻿class BufferUnderflowException : System.Exception {
+}
