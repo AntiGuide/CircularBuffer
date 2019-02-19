@@ -2,7 +2,7 @@
 
 class BufferIndex {
     private int capacity;
-    private int index;
+    private volatile int index;
     public int Index {
         get {
             return index;
