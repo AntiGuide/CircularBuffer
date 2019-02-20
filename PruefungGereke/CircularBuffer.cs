@@ -9,9 +9,7 @@ class CircularBuffer<T> : ICircularBuffer<T> {
 
     private volatile T[] buffer;
     private BufferIndex writeIndex;
-    private Mutex write = new Mutex();
     private BufferIndex readIndex;
-    private Mutex read = new Mutex();
     private Mutex operating = new Mutex();
     private volatile int count;
     private readonly int capacity;
@@ -39,10 +37,12 @@ class CircularBuffer<T> : ICircularBuffer<T> {
             throw new BufferUnderflowException();
         }
 
+        T ret;
         Interlocked.Decrement(ref count);
-        read.WaitOne();
-        var ret = buffer[readIndex.Index++];
-        read.ReleaseMutex();
+        lock(readIndex){
+            ret = buffer[readIndex.Index++];
+        }
+
         return ret;
     }
 
@@ -62,9 +62,9 @@ class CircularBuffer<T> : ICircularBuffer<T> {
         }
 
         Interlocked.Increment(ref count);
-        write.WaitOne();
-        buffer[writeIndex.Index++] = obj;
-        write.ReleaseMutex();
+        lock(writeIndex){
+            buffer[writeIndex.Index++] = obj;
+        }
     }
 
     public int ProduceAll(IEnumerable<T> add) {
@@ -87,7 +87,7 @@ class CircularBuffer<T> : ICircularBuffer<T> {
             isNotEmpty.Reset();
             isNotEmpty.WaitOne();
         }
-        
+
         operating.WaitOne();
         var ret = Consume();
         isNotFull.Set();
