@@ -12,6 +12,9 @@ class CircularBuffer<T> : ICircularBuffer<T> {
     private Mutex write = new Mutex();
     private BufferIndex readIndex;
     private Mutex read = new Mutex();
+    private Mutex mayShrink = new Mutex();
+    private Mutex mayGrow = new Mutex();
+    private Mutex operating = new Mutex();
     private volatile int count;
     private readonly int capacity;
 
@@ -82,27 +85,35 @@ class CircularBuffer<T> : ICircularBuffer<T> {
     }
 
     public T WaitConsume() {
+        operating.WaitOne();
+        mayShrink.WaitOne();
         if (IsEmpty) {
+            isNotEmpty.Reset();
+            operating.ReleaseMutex();
             isNotEmpty.WaitOne();
+            operating.WaitOne();
         }
 
-        Interlocked.Decrement(ref count);
-        read.WaitOne();
-        var ret = buffer[readIndex.Index++];
-        read.ReleaseMutex();
+        var ret = Consume();
         isNotFull.Set();
+        mayShrink.ReleaseMutex();
+        operating.ReleaseMutex();
         return ret;
     }
 
     public void WaitProduce(T obj) {
+        mayGrow.WaitOne();
+        operating.WaitOne();
         if (IsFull) {
+            isNotFull.Reset();
+            operating.ReleaseMutex();
             isNotFull.WaitOne();
+            operating.WaitOne();
         }
 
-        Interlocked.Increment(ref count);
-        write.WaitOne();
-        buffer[writeIndex.Index++] = obj;
-        write.ReleaseMutex();
+        Produce(obj);
         isNotEmpty.Set();
+        mayGrow.ReleaseMutex();
+        operating.ReleaseMutex();
     }
 }
