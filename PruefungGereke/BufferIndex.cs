@@ -1,8 +1,22 @@
 ﻿using System;
 
+/// <summary>
+/// A class to help looping through the CircularBuffer
+/// </summary>
 class BufferIndex {
+    /// <summary>
+    /// The capacity of the corresponding buffer
+    /// </summary>
     private int capacity;
+
+    /// <summary>
+    /// The current index
+    /// </summary>
     private volatile int index;
+
+    /// <summary>
+    /// The current index
+    /// </summary>
     public int Index {
         get {
             return index;
@@ -22,6 +36,10 @@ class BufferIndex {
         }
     }
 
+    /// <summary>
+    /// Creates a BufferIndex
+    /// </summary>
+    /// <param name="capacity">The capacity of the corresponding buffer</param>
     public BufferIndex(int capacity) {
         if (capacity <= 0) {
             throw new ArgumentException("Capacity for a BufferIndex must me greater that 0!");
