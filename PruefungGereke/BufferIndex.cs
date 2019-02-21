@@ -24,7 +24,7 @@ class BufferIndex {
 
         set {
             var newValue = value;
-            while (newValue >= capacity) {
+            while (newValue >= capacity) { // Decrease/Increase value until it is between 0 and capacity
                 newValue -= capacity;
             }
 
@@ -41,7 +41,7 @@ class BufferIndex {
     /// </summary>
     /// <param name="capacity">The capacity of the corresponding buffer</param>
     public BufferIndex(int capacity) {
-        if (capacity <= 0) {
+        if (capacity <= 0) { // Capacity has to be greater that 0
             throw new ArgumentException("Capacity for a BufferIndex must me greater that 0!");
         }
 

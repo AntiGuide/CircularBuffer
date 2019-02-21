@@ -8,6 +8,7 @@ using System.Threading;
 /// </summary>
 /// <typeparam name="T">The object that was consumed and is now passed to the delegates function</typeparam>
 class CircularBuffer<T> : ICircularBuffer<T> {
+    #region
     /// <summary>
     /// Event is signaled when the buffer is not empty
     /// </summary>
@@ -67,7 +68,7 @@ class CircularBuffer<T> : ICircularBuffer<T> {
     /// Is true if the buffer is full
     /// </summary>
     public bool IsFull => (count == capacity);
-
+    #endregion
     /// <summary>
     /// Creates a CircularBuffer of the given type
     /// </summary>
@@ -75,7 +76,7 @@ class CircularBuffer<T> : ICircularBuffer<T> {
     public CircularBuffer(int capacity) {
         buffer = new T[capacity];
         this.capacity = capacity;
-        writeIndex = new BufferIndex(capacity);
+        writeIndex = new BufferIndex(capacity); // Indices created at 0 (Automatic overlow at capacity)
         readIndex = new BufferIndex(capacity);
     }
 
@@ -83,7 +84,7 @@ class CircularBuffer<T> : ICircularBuffer<T> {
     /// Clears the buffer
     /// </summary>
     public void Clear() {
-        count = 0;
+        count = 0; // Clears the buffer through resetting the count + indices
         writeIndex.Index = 0;
         readIndex.Index = 0;
     }
@@ -93,12 +94,12 @@ class CircularBuffer<T> : ICircularBuffer<T> {
     /// </summary>
     /// <returns>Returns consumed item</returns>
     public T Consume() {
-        if (IsEmpty) {
+        if (IsEmpty) { // Can't consume if the array is empty
             throw new BufferUnderflowException();
         }
 
         T ret;
-        Interlocked.Decrement(ref count);
+        Interlocked.Decrement(ref count); // Decrements the buffers count and increases the readIndex
         lock(readIndex){
             ret = buffer[readIndex.Index++];
         }
@@ -113,7 +114,7 @@ class CircularBuffer<T> : ICircularBuffer<T> {
     public void ConsumeAll(Callback<T> callback) {
         for (; ; ) {
             try {
-                callback(Consume());
+                callback(Consume()); // Call given function with consumed item as parameter
             } catch (BufferUnderflowException) {
                 return;
             }
@@ -125,12 +126,12 @@ class CircularBuffer<T> : ICircularBuffer<T> {
     /// </summary>
     /// <param name="obj">The object to add to the buffer</param>
     public void Produce(T obj) {
-        if (IsFull) {
+        if (IsFull) {// Can't produce if the array is full
             throw new BufferOverflowException();
         }
 
-        Interlocked.Increment(ref count);
-        lock(writeIndex){
+        Interlocked.Increment(ref count); // Increments the buffers count and increases the writeIndex
+        lock (writeIndex){
             buffer[writeIndex.Index++] = obj;
         }
     }
@@ -144,7 +145,7 @@ class CircularBuffer<T> : ICircularBuffer<T> {
         var tmpCount = 0;
         foreach (var item in add) {
             try {
-                Produce(item);
+                Produce(item); // Call produce for every item in add
             } catch (BufferOverflowException) {
                 return tmpCount;
             }
@@ -160,12 +161,12 @@ class CircularBuffer<T> : ICircularBuffer<T> {
     /// </summary>
     /// <returns>Returns the consumed item</returns>
     public T WaitConsume() {
-        if (IsEmpty) {
+        if (IsEmpty) { // If buffer is empty wait for production of an item
             isNotEmpty.Reset();
             isNotEmpty.WaitOne();
         }
 
-        operating.WaitOne();
+        operating.WaitOne(); // Lock mutex to ensure consumption and setting of ManualRelaseEvent occur without interference from WaitProduce
         var ret = Consume();
         isNotFull.Set();
         operating.ReleaseMutex();
@@ -177,12 +178,12 @@ class CircularBuffer<T> : ICircularBuffer<T> {
     /// </summary>
     /// <param name="obj">The object to add to the buffer</param>
     public void WaitProduce(T obj) {
-        if (IsFull) {
+        if (IsFull) { // If buffer is full wait for consumption of an item
             isNotFull.Reset();
             isNotFull.WaitOne();
         }
 
-        operating.WaitOne();
+        operating.WaitOne(); // Lock mutex to ensure production and setting of ManualRelaseEvent occur without interference from WaitConsume
         Produce(obj);
         isNotEmpty.Set();
         operating.ReleaseMutex();
